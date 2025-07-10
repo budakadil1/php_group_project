@@ -65,6 +65,13 @@ $username = $_SESSION['username'] ?? 'User';
                     <a href="mass_import.php" style="background: #ffc107; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">Mass Import</a>
                 </div>
             </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem;">
+                <div style="padding: 1rem; background: #f8f9fa; border-radius: 6px; text-align: center;">
+                    <h3>Manage Suppliers</h3>
+                    <p>View, edit, or delete suppliers</p>
+                    <a href="manage_suppliers.php" style="background: #17a2b8; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">Manage Suppliers</a>
+                </div>
+            </div>
         </div>
     </div>
 </body>

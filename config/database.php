@@ -7,7 +7,7 @@
 // Config
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'cp476_inventory');
-define('DB_USER', 'admin');   
+define('DB_USER', 'root');   
 define('DB_PASS', '4642');     
 define('DB_CHARSET', 'utf8mb4');
 

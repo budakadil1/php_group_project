@@ -19,10 +19,38 @@ require_once 'config/database.php';
 initializeDatabase();
 $products = getAllProducts();
 
+// Handle search
+$searchTerm = '';
+if (isset($_GET['search'])) {
+    $searchTerm = trim($_GET['search']);
+    if ($searchTerm !== '') {
+        $products = array_filter($products, function($product) use ($searchTerm) {
+            return (
+                stripos($product['product_name'], $searchTerm) !== false ||
+                stripos($product['supplier_name'], $searchTerm) !== false ||
+                stripos((string)$product['product_id'], $searchTerm) !== false
+            );
+        });
+    }
+}
+
 // Handle logout
 if (isset($_GET['logout'])) {
     session_destroy();
     header('Location: index.php');
+    exit();
+}
+
+// Handle delete product offering
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['delete_product_id'], $_POST['delete_supplier_id'])
+) {
+    $productId = intval($_POST['delete_product_id']);
+    $supplierId = intval($_POST['delete_supplier_id']);
+    deleteProductOffering($productId, $supplierId);
+    // Refresh to avoid resubmission
+    header('Location: inventory.php');
     exit();
 }
 
@@ -172,7 +200,11 @@ $username = $_SESSION['username'] ?? 'User';
                     <h1>Inventory Management</h1>
                     <p>View and manage your product inventory</p>
                 </div>
-                <div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem;">
+                    <form method="GET" style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="text" name="search" placeholder="Search by product, supplier, or ID" value="<?= htmlspecialchars($searchTerm) ?>" style="padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
+                        <button type="submit" style="background: #007bff; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Search</button>
+                    </form>
                     <a href="add_product.php" style="background: #007bff; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">Add New Product</a>
                 </div>
             </div>
@@ -188,6 +220,7 @@ $username = $_SESSION['username'] ?? 'User';
                             <th>Quantity</th>
                             <th>Status</th>
                             <th>Supplier</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -206,6 +239,13 @@ $username = $_SESSION['username'] ?? 'User';
                                     </span>
                                 </td>
                                 <td><?= htmlspecialchars($product['supplier_name']) ?></td>
+                                <td>
+                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this product offering?');">
+                                        <input type="hidden" name="delete_product_id" value="<?= htmlspecialchars($product['product_id']) ?>">
+                                        <input type="hidden" name="delete_supplier_id" value="<?= htmlspecialchars($product['supplier_id']) ?>">
+                                        <button type="submit" style="background: #dc3545; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer;">Delete</button>
+                                    </form>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
