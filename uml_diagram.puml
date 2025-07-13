@@ -1,0 +1,118 @@
+@startuml CP476_Inventory_Classes
+
+' Database and Connection Classes
+class Database {
+    - $instance: Database
+    - $pdo: PDO
+    + getInstance(): Database
+    + getConnection(): PDO
+}
+
+' Base Manager Class
+abstract class BaseManager {
+    # $pdo: PDO
+    + __construct()
+    + getConnection(): PDO
+}
+
+' User Classes
+class User {
+    + $id: int
+    + $username: string
+    + $email: string
+    + __construct(data: array)
+}
+
+class UserManager extends BaseManager {
+    + createUser(username: string, password: string, email: string): bool
+    + authenticateUser(username: string, password: string): User|false
+    + usernameExists(username: string): bool
+    + getUserByUsername(username: string): User|false
+    + getAllUsers(): array
+}
+
+' Supplier Classes
+class Supplier {
+    + $supplier_id: int
+    + $supplier_name: string
+    + $address: string
+    + $phone: string
+    + $email: string
+    + __construct(data: array)
+}
+
+class SupplierManager extends BaseManager {
+    + addSupplier(supplierId: int, supplierName: string, address: string, phone: string, email: string): bool
+    + updateSupplier(supplierId: int, supplierName: string, address: string, phone: string, email: string): bool
+    + deleteSupplier(supplierId: int): bool
+    + supplierExists(supplierId: int): bool
+    + getSupplierById(supplierId: int): Supplier|false
+    + getAllSuppliers(): array
+}
+
+' Product Classes
+class Product {
+    + $product_id: int
+    + $product_name: string
+    + $description: string
+    + __construct(data: array)
+}
+
+class ProductManager extends BaseManager {
+    + addProduct(productId: int, productName: string, description: string): bool
+    + getProductById(productId: int): Product|false
+    + getAllProducts(): array
+    + updateProduct(productId: int, productName: string, description: string): bool
+    + deleteProduct(productId: int): bool
+    + productExists(productId: int): bool
+}
+
+' Product-Supplier Relationship Classes
+class ProductSupplier {
+    + $product_id: int
+    + $supplier_id: int
+    + $price: float
+    + $quantity: int
+    + $status: string
+    + __construct(data: array)
+}
+
+class ProductSupplierManager extends BaseManager {
+    + addProductOffering(productId: int, supplierId: int, price: float, quantity: int, status: string): bool
+    + deleteProductOffering(productId: int, supplierId: int): bool
+    + productSupplierLinkExists(productId: int, supplierId: int): bool
+    + getAllProductOfferings(): array
+    + getProductsBySupplier(supplierId: int): array
+    + getProductOffering(productId: int, supplierId: int): ProductSupplier|false
+}
+
+' Import Class
+class Importer {
+    - $supplierManager: SupplierManager
+    - $productManager: ProductManager
+    - $productSupplierManager: ProductSupplierManager
+    + __construct()
+    + importSuppliers(lines: array): array
+    + importProducts(lines: array): array
+}
+
+' Relationships
+Database --> BaseManager : provides connection
+BaseManager <|-- UserManager
+BaseManager <|-- SupplierManager
+BaseManager <|-- ProductManager
+BaseManager <|-- ProductSupplierManager
+
+UserManager --> User : manages
+SupplierManager --> Supplier : manages
+ProductManager --> Product : manages
+ProductSupplierManager --> ProductSupplier : manages
+
+Importer --> SupplierManager : uses
+Importer --> ProductManager : uses
+Importer --> ProductSupplierManager : uses
+
+ProductSupplier --> Product : references
+ProductSupplier --> Supplier : references
+
+@enduml 

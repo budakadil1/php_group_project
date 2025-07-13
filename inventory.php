@@ -5,19 +5,43 @@
  */
 
 session_start();
+require_once __DIR__ . '/classes/Product.php';
+require_once __DIR__ . '/classes/Supplier.php';
+require_once __DIR__ . '/classes/ProductSupplier.php';
 
-// Check if user is logged in
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     header('Location: login.php');
     exit();
 }
 
-// Include database configuration
-require_once 'config/database.php';
+$productManager = new ProductManager();
+$supplierManager = new SupplierManager();
+$productSupplierManager = new ProductSupplierManager();
 
-// Initialize database and get products
-initializeDatabase();
-$products = getAllProducts();
+// Get all products with supplier information
+$products = [];
+$allProducts = $productManager->getAllProducts();
+$allSuppliers = $supplierManager->getAllSuppliers();
+$allProductOfferings = $productSupplierManager->getAllProductOfferings();
+
+// Combine product and supplier data
+foreach ($allProductOfferings as $offering) {
+    $product = $productManager->getProductById($offering->product_id);
+    $supplier = $supplierManager->getSupplierById($offering->supplier_id);
+    
+    if ($product && $supplier) {
+        $products[] = [
+            'product_id' => $product->product_id,
+            'product_name' => $product->product_name,
+            'description' => $product->description,
+            'price' => $offering->price,
+            'quantity' => $offering->quantity,
+            'status' => $offering->status,
+            'supplier_id' => $supplier->supplier_id,
+            'supplier_name' => $supplier->supplier_name
+        ];
+    }
+}
 
 // Handle search
 $searchTerm = '';
@@ -48,8 +72,7 @@ if (
 ) {
     $productId = intval($_POST['delete_product_id']);
     $supplierId = intval($_POST['delete_supplier_id']);
-    deleteProductOffering($productId, $supplierId);
-    // Refresh to avoid resubmission
+    $productSupplierManager->deleteProductOffering($productId, $supplierId);
     header('Location: inventory.php');
     exit();
 }
@@ -186,6 +209,7 @@ $username = $_SESSION['username'] ?? 'User';
             <a href="index.php" class="home-link">CP476 Inventory Manager</a>
             <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem;">
                 <span style="color: white;">Welcome, <?= htmlspecialchars($username) ?></span>
+                <a href="dashboard.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; background-color: rgba(255,255,255,0.2); border-radius: 4px;">Dashboard</a>
                 <a href="?logout=1" style="color: white; text-decoration: none; padding: 0.5rem 1rem; background-color: rgba(255,255,255,0.2); border-radius: 4px;">Logout</a>
             </div>
         </div>
@@ -245,16 +269,16 @@ $username = $_SESSION['username'] ?? 'User';
                                         <input type="hidden" name="delete_supplier_id" value="<?= htmlspecialchars($product['supplier_id']) ?>">
                                         <button type="submit" style="background: #dc3545; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer;">Delete</button>
                                     </form>
+                                    <a href="add_product.php?edit=1&product_id=<?= urlencode($product['product_id']) ?>&supplier_id=<?= urlencode($product['supplier_id']) ?>" style="background: #ffc107; color: #212529; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; text-decoration: none; margin-left: 0.5rem;">Edit</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-                
             <?php else: ?>
                 <div class="no-data">
-                    <h3>No Products Found</h3>
-                    <p>Your inventory is empty. Add some products to get started!</p>
+                    <p>No products found in inventory.</p>
+                    <p>Add your first product to get started!</p>
                 </div>
             <?php endif; ?>
         </div>

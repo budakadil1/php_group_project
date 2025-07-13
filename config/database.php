@@ -75,8 +75,8 @@ function initializeDatabase() {
         
         $pdo->exec($sql);
         
-        // Create product_supplier junction table
-        $sql = "CREATE TABLE IF NOT EXISTS product_supplier (
+        // Create InventoryTable junction table
+        $sql = "CREATE TABLE IF NOT EXISTS InventoryTable (
             product_id INT,
             supplier_id INT,
             price DECIMAL(10,2) NOT NULL,
@@ -354,7 +354,7 @@ function getAllProducts() {
                     s.supplier_id,
                     s.supplier_name
                 FROM product p
-                JOIN product_supplier ps ON p.product_id = ps.product_id
+                JOIN InventoryTable ps ON p.product_id = ps.product_id
                 JOIN supplier s ON ps.supplier_id = s.supplier_id
                 ORDER BY p.product_name, s.supplier_name";
         
@@ -420,7 +420,7 @@ function addProductOffering($productId, $productName, $description, $price, $qua
         $stmt->execute([$productId, $productName, $description]);
         
         // Step 2: Insert or update the product-supplier link.
-        $sql = "INSERT INTO product_supplier (product_id, supplier_id, price, quantity, status) 
+        $sql = "INSERT INTO InventoryTable (product_id, supplier_id, price, quantity, status) 
                 VALUES (?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE price = VALUES(price), quantity = VALUES(quantity), status = VALUES(status)";
         $stmt = $pdo->prepare($sql);
@@ -448,12 +448,12 @@ function deleteProductOffering($productId, $supplierId) {
     }
 
     try {
-        $sql = "DELETE FROM product_supplier WHERE product_id = ? AND supplier_id = ?";
+        $sql = "DELETE FROM InventoryTable WHERE product_id = ? AND supplier_id = ?";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$productId, $supplierId]);
         
         // Optional: Check if the product has any other suppliers left. If not, delete the product itself.
-        $sql = "SELECT COUNT(*) FROM product_supplier WHERE product_id = ?";
+        $sql = "SELECT COUNT(*) FROM InventoryTable WHERE product_id = ?";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$productId]);
         if ($stmt->fetchColumn() == 0) {
@@ -481,7 +481,7 @@ function productSupplierLinkExists($productId, $supplierId) {
     }
     
     try {
-        $sql = "SELECT COUNT(*) FROM product_supplier WHERE product_id = ? AND supplier_id = ?";
+        $sql = "SELECT COUNT(*) FROM InventoryTable WHERE product_id = ? AND supplier_id = ?";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$productId, $supplierId]);
         
@@ -512,7 +512,7 @@ function getProductsBySupplier($supplierId) {
                     ps.quantity,
                     ps.status
                 FROM product p
-                JOIN product_supplier ps ON p.product_id = ps.product_id
+                JOIN InventoryTable ps ON p.product_id = ps.product_id
                 WHERE ps.supplier_id = ?
                 ORDER BY p.product_name";
         $stmt = $pdo->prepare($sql);
@@ -545,7 +545,7 @@ function getProductsByStatus($status) {
                     ps.status,
                     s.supplier_name
                 FROM product p
-                JOIN product_supplier ps ON p.product_id = ps.product_id
+                JOIN InventoryTable ps ON p.product_id = ps.product_id
                 JOIN supplier s ON ps.supplier_id = s.supplier_id
                 WHERE ps.status = ?
                 ORDER BY p.product_name";

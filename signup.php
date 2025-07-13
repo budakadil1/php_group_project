@@ -5,9 +5,7 @@
  */
 
 session_start();
-
-// Include database configuration
-require_once 'config/database.php';
+require_once __DIR__ . '/classes/User.php';
 
 $error = '';
 $success = '';
@@ -17,7 +15,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     $confirm = $_POST['confirm_password'] ?? '';
 
-    // Validate input
     if (empty($username) || empty($password) || empty($confirm)) {
         $error = 'Please fill in all fields.';
     } elseif (strlen($username) < 3) {
@@ -27,17 +24,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($password !== $confirm) {
         $error = 'Passwords do not match.';
     } else {
-        // Initialize database if needed
-        initializeDatabase();
-        
-        // Check if username already exists
-        if (usernameExists($username)) {
+        $userManager = new UserManager();
+        if ($userManager->usernameExists($username)) {
             $error = 'Username already exists. Please choose a different username.';
         } else {
-            // Create new user
-            if (createUser($username, $password)) {
+            if ($userManager->createUser($username, $password)) {
                 $success = 'Account created successfully! You can now log in.';
-                // Clear form data
                 $_POST = array();
             } else {
                 $error = 'Failed to create account. Please try again.';

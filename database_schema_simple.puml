@@ -1,0 +1,49 @@
+@startuml CP476_Database_Schema_Simple
+
+' Simple table display
+skinparam class {
+    BackgroundColor White
+    ArrowColor #333333
+    BorderColor #666666
+}
+
+' Users Table
+class users {
+    + id (INT AUTO_INCREMENT PRIMARY KEY)
+    + username (VARCHAR(50) UNIQUE)
+    + password_hash (VARCHAR(255))
+    + email (VARCHAR(100))
+    + created_at (TIMESTAMP)
+    + updated_at (TIMESTAMP)
+}
+
+' Supplier Table
+class supplier {
+    + supplier_id (INT PRIMARY KEY)
+    + supplier_name (VARCHAR(100))
+    + address (VARCHAR(255))
+    + phone (VARCHAR(20))
+    + email (VARCHAR(100))
+}
+
+' Product Table
+class product {
+    + product_id (INT PRIMARY KEY)
+    + product_name (VARCHAR(100))
+    + description (TEXT)
+}
+
+' Inventory Table
+class InventoryTable {
+    + product_id (INT)
+    + supplier_id (INT)
+    + price (DECIMAL(10,2))
+    + quantity (INT DEFAULT 0)
+    + status (CHAR(1))
+    --
+    + PRIMARY KEY (product_id, supplier_id)
+    + FOREIGN KEY (product_id) REFERENCES product(product_id)
+    + FOREIGN KEY (supplier_id) REFERENCES supplier(supplier_id)
+}
+
+@enduml 

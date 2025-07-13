@@ -5,15 +5,12 @@
  */
 
 session_start();
+require_once __DIR__ . '/classes/Importer.php';
 
-// Check if user is logged in
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     header('Location: login.php');
     exit();
 }
-
-// Include database configuration
-require_once 'config/database.php';
 
 $error = '';
 $success = '';
@@ -31,188 +28,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please select a valid file to upload.';
     } else {
         // Process the file
-        $importResults = processImportFile($uploadedFile, $importType);
-        
-        if (isset($importResults['error'])) {
-            $error = $importResults['error'];
+        $importer = new Importer();
+        $content = file_get_contents($uploadedFile['tmp_name']);
+        if ($content === false) {
+            $error = 'Failed to read uploaded file.';
         } else {
-            $success = "Import completed! {$importResults['success_count']} records imported successfully. {$importResults['skip_count']} records skipped. {$importResults['error_count']} records failed.";
+            $lines = explode("\n", trim($content));
+            $lines = array_filter($lines, function($line) {
+                return !empty(trim($line));
+            });
+            
+            if ($importType === 'product') {
+                $importResults = $importer->importProducts($lines);
+            } else {
+                $importResults = $importer->importSuppliers($lines);
+            }
+            
+            if (isset($importResults['error'])) {
+                $error = $importResults['error'];
+            } else {
+                $success = "Import completed! {$importResults['success_count']} records imported successfully. {$importResults['skip_count']} records skipped. {$importResults['error_count']} records failed.";
+            }
         }
-    }
-}
-
-/**
- * Process the uploaded file
- * @param array $file
- * @param string $type
- * @return array
- */
-function processImportFile($file, $type) {
-    $pdo = getDBConnection();
-    if (!$pdo) {
-        return ['error' => 'Database connection failed.'];
-    }
-    
-    // Initialize database
-    initializeDatabase();
-    
-    $successCount = 0;
-    $errorCount = 0;
-    $skipCount = 0;
-    $errors = [];
-    $skipped = [];
-    
-    // Check file size (5MB limit)
-    if ($file['size'] > 5 * 1024 * 1024) {
-        return ['error' => 'File size exceeds 5MB limit.'];
-    }
-    
-    // Read file content
-    $content = file_get_contents($file['tmp_name']);
-    if ($content === false) {
-        return ['error' => 'Failed to read uploaded file.'];
-    }
-    
-    // Split into lines
-    $lines = explode("\n", trim($content));
-    $lineNumber = 0;
-    
-    foreach ($lines as $line) {
-        $lineNumber++;
-        $line = trim($line);
-        
-        // Skip empty lines
-        if (empty($line)) {
-            continue;
-        }
-        
-        // Parse line based on type
-        if ($type === 'product') {
-            $result = processProductLine($line, $lineNumber, $pdo);
-        } else {
-            $result = processSupplierLine($line, $lineNumber, $pdo);
-        }
-        
-        if ($result['success'] === true && empty($result['skipped'])) {
-            $successCount++;
-        } elseif (!empty($result['skipped'])) {
-            $skipCount++;
-            $skipped[] = "Line {$lineNumber}: {$result['skip_reason']}";
-        } else {
-            $errorCount++;
-            $errors[] = "Line {$lineNumber}: {$result['error']}";
-        }
-    }
-    
-    return [
-        'success_count' => $successCount,
-        'skip_count' => $skipCount,
-        'error_count' => $errorCount,
-        'errors' => $errors,
-        'skipped' => $skipped
-    ];
-}
-
-/**
- * Process a single product line
- * @param string $line
- * @param int $lineNumber
- * @param PDO $pdo
- * @return array
- */
-function processProductLine($line, $lineNumber, $pdo) {
-    // Split by comma and trim whitespace
-    $fields = array_map('trim', explode(',', $line));
-    
-    // Validate field count (7 fields: product_id, product_name, description, price, quantity, status, supplier_id)
-    if (count($fields) !== 7) {
-        return ['success' => false, 'error' => 'Invalid field count. Expected 7 fields.'];
-    }
-    
-    list($productId, $productName, $description, $price, $quantity, $status, $supplierId) = $fields;
-    
-    // Validate data
-    if (!is_numeric($productId) || $productId <= 0) return ['success' => false, 'error' => 'Invalid product ID.'];
-    if (empty($productName)) return ['success' => false, 'error' => 'Product name is required.'];
-    if (!is_numeric($price) || $price < 0) return ['success' => false, 'error' => 'Invalid price.'];
-    if (!is_numeric($quantity) || $quantity < 0) return ['success' => false, 'error' => 'Invalid quantity.'];
-    if (!in_array($status, ['A', 'B', 'C'])) return ['success' => false, 'error' => 'Invalid status. Must be A, B, or C.'];
-    if (!is_numeric($supplierId) || $supplierId <= 0) return ['success' => false, 'error' => 'Invalid supplier ID.'];
-    
-    // Check if supplier exists
-    if (!supplierExists($supplierId)) {
-        return ['success' => false, 'error' => "Supplier ID {$supplierId} does not exist."];
-    }
-    
-    // Check if this specific product-supplier link already exists
-    if (productSupplierLinkExists($productId, $supplierId)) {
-        return ['success' => true, 'skipped' => true, 'skip_reason' => "Product {$productId} from supplier {$supplierId} already exists."];
-    }
-    
-    // Add the product offering
-    if (addProductOffering($productId, $productName, $description, $price, $quantity, $status, $supplierId)) {
-        return ['success' => true];
-    } else {
-        return ['success' => false, 'error' => 'Database error while adding product offering.'];
-    }
-}
-
-/**
- * Process a single supplier line
- * @param string $line
- * @param int $lineNumber
- * @param PDO $pdo
- * @return array
- */
-function processSupplierLine($line, $lineNumber, $pdo) {
-    // Split by comma and trim whitespace
-    $fields = array_map('trim', explode(',', $line));
-    
-    // Validate field count (5 fields: supplier_id, supplier_name, address, phone, email)
-    if (count($fields) !== 5) {
-        return ['success' => false, 'error' => 'Invalid field count. Expected 5 fields.'];
-    }
-    
-    $supplierId = $fields[0];
-    $supplierName = $fields[1];
-    $address = $fields[2];
-    $phone = $fields[3];
-    $email = $fields[4];
-    
-    // Validate data
-    if (!is_numeric($supplierId) || $supplierId <= 0) {
-        return ['success' => false, 'error' => 'Invalid supplier ID.'];
-    }
-    
-    if (empty($supplierName)) {
-        return ['success' => false, 'error' => 'Supplier name is required.'];
-    }
-    
-    if (empty($address)) {
-        return ['success' => false, 'error' => 'Address is required.'];
-    }
-    
-    if (empty($phone)) {
-        return ['success' => false, 'error' => 'Phone is required.'];
-    }
-    
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return ['success' => false, 'error' => 'Invalid email address.'];
-    }
-    
-    // Check if supplier already exists
-    if (supplierExists($supplierId)) {
-        return ['success' => true, 'skipped' => true, 'skip_reason' => 'Supplier ID already exists'];
-    }
-    
-    // Add the supplier
-    try {
-        $sql = "INSERT INTO supplier (supplier_id, supplier_name, address, phone, email) VALUES (?, ?, ?, ?, ?)";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$supplierId, $supplierName, $address, $phone, $email]);
-        return ['success' => true];
-    } catch (PDOException $e) {
-        return ['success' => false, 'error' => 'Database error: ' . $e->getMessage()];
     }
 }
 
@@ -306,12 +143,44 @@ $username = $_SESSION['username'] ?? 'User';
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
+            font-weight: 600;
             text-decoration: none;
             display: inline-block;
         }
         
         .btn-secondary:hover {
-            background: #5a6268;
+            background: #545b62;
+        }
+        
+        .file-info {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .error-details,
+        .skip-details {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+        }
+        
+        .error-list,
+        .skip-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 0.5rem;
+        }
+        
+        .error-item,
+        .skip-item {
+            padding: 0.25rem 0;
+            font-size: 0.9rem;
+            color: #666;
         }
         
         .back-btn {
@@ -328,89 +197,6 @@ $username = $_SESSION['username'] ?? 'User';
         .back-btn:hover {
             background: #5a6268;
         }
-        
-        .file-info {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 4px;
-            margin-top: 1rem;
-            border-left: 4px solid #ffc107;
-        }
-        
-        .file-info h4 {
-            margin: 0 0 0.5rem 0;
-            color: #333;
-        }
-        
-        .file-info ul {
-            margin: 0;
-            padding-left: 1.5rem;
-        }
-        
-        .file-info li {
-            margin-bottom: 0.25rem;
-        }
-        
-        .error-details {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 4px;
-            padding: 1rem;
-            margin-top: 1rem;
-        }
-        
-        .error-details h4 {
-            margin: 0 0 0.5rem 0;
-            color: #856404;
-        }
-        
-        .error-list {
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
-        .error-item {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 0.5rem;
-            margin-bottom: 0.25rem;
-            border-radius: 3px;
-            font-size: 14px;
-            border-left: 3px solid #dc3545;
-        }
-        
-        .skip-details {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            border-radius: 4px;
-            padding: 1rem;
-            margin-top: 1rem;
-        }
-        
-        .skip-details h4 {
-            margin: 0 0 0.5rem 0;
-            color: #155724;
-        }
-        
-        .skip-list {
-            margin: 0;
-            padding-left: 1.5rem;
-        }
-        
-        .skip-item {
-            margin-bottom: 0.25rem;
-        }
-        
-        @media (max-width: 768px) {
-            .import-container {
-                margin: 1rem;
-                padding: 1.5rem;
-            }
-            
-            .form-actions {
-                flex-direction: column;
-            }
-        }
     </style>
 </head>
 
@@ -420,6 +206,7 @@ $username = $_SESSION['username'] ?? 'User';
             <a href="index.php" class="home-link">CP476 Inventory Manager</a>
             <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem;">
                 <span style="color: white;">Welcome, <?= htmlspecialchars($username) ?></span>
+                <a href="dashboard.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; background-color: rgba(255,255,255,0.2); border-radius: 4px;">Dashboard</a>
                 <a href="?logout=1" style="color: white; text-decoration: none; padding: 0.5rem 1rem; background-color: rgba(255,255,255,0.2); border-radius: 4px;">Logout</a>
             </div>
         </div>
@@ -438,62 +225,56 @@ $username = $_SESSION['username'] ?? 'User';
             
             <?php if ($success): ?>
                 <div class="success"><?= htmlspecialchars($success) ?></div>
-                <?php if (!empty($importResults['errors'])): ?>
-                    <div class="error-details">
-                        <h4>Import Errors:</h4>
-                        <div class="error-list">
-                            <?php foreach (array_slice($importResults['errors'], 0, 10) as $error): ?>
-                                <div class="error-item"><?= htmlspecialchars($error) ?></div>
-                            <?php endforeach; ?>
-                            <?php if (count($importResults['errors']) > 10): ?>
-                                <div class="error-item">... and <?= count($importResults['errors']) - 10 ?> more errors</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
-                <?php if (!empty($importResults['skipped'])): ?>
-                    <div class="skip-details">
-                        <h4>Skipped Records:</h4>
-                        <div class="skip-list">
-                            <?php foreach (array_slice($importResults['skipped'], 0, 10) as $skip): ?>
-                                <div class="skip-item"><?= htmlspecialchars($skip) ?></div>
-                            <?php endforeach; ?>
-                            <?php if (count($importResults['skipped']) > 10): ?>
-                                <div class="skip-item">... and <?= count($importResults['skipped']) - 10 ?> more skipped records</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
             <?php endif; ?>
             
-            <form method="POST" action="" enctype="multipart/form-data">
+            <?php if (isset($importResults['errors']) && count($importResults['errors']) > 0): ?>
+                <div class="error-details">
+                    <h3>Import Errors (showing first 10):</h3>
+                    <div class="error-list">
+                        <?php foreach (array_slice($importResults['errors'], 0, 10) as $error): ?>
+                            <div class="error-item"><?= htmlspecialchars($error) ?></div>
+                        <?php endforeach; ?>
+                        <?php if (count($importResults['errors']) > 10): ?>
+                            <div class="error-item">... and <?= count($importResults['errors']) - 10 ?> more errors</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (isset($importResults['skipped']) && count($importResults['skipped']) > 0): ?>
+                <div class="skip-details">
+                    <h3>Skipped Records (showing first 10):</h3>
+                    <div class="skip-list">
+                        <?php foreach (array_slice($importResults['skipped'], 0, 10) as $skip): ?>
+                            <div class="skip-item"><?= htmlspecialchars($skip) ?></div>
+                        <?php endforeach; ?>
+                        <?php if (count($importResults['skipped']) > 10): ?>
+                            <div class="skip-item">... and <?= count($importResults['skipped']) - 10 ?> more skipped records</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
+            <form method="POST" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="import_type">Import Type <span class="required">*</span></label>
                     <select id="import_type" name="import_type" required>
                         <option value="">Select Import Type</option>
-                        <option value="product" <?= ($_POST['import_type'] ?? '') === 'product' ? 'selected' : '' ?>>Product</option>
-                        <option value="supplier" <?= ($_POST['import_type'] ?? '') === 'supplier' ? 'selected' : '' ?>>Supplier</option>
+                        <option value="supplier" <?= ($_POST['import_type'] ?? '') === 'supplier' ? 'selected' : '' ?>>Suppliers</option>
+                        <option value="product" <?= ($_POST['import_type'] ?? '') === 'product' ? 'selected' : '' ?>>Products</option>
                     </select>
                 </div>
                 
                 <div class="form-group">
                     <label for="import_file">File Upload <span class="required">*</span></label>
                     <input type="file" id="import_file" name="import_file" accept=".txt,.csv" required>
-                </div>
-                
-                <div class="file-info">
-                    <h4>File Requirements:</h4>
-                    <ul>
-                        <li>Accepted formats: .txt or .csv files</li>
-                        <li>Maximum file size: 5MB</li>
-                        <li>File should contain one record per line</li>
-                        <li>Fields should be separated by commas</li>
-                        <li><strong>Product format:</strong> product_id, product_name, description, price, quantity, status, supplier_id</li>
-                        <li><strong>Supplier format:</strong> supplier_id, supplier_name, address, phone, email</li>
-                        <li>Status must be A, B, or C for products</li>
-                        <li>Products with non-valid supplier IDs will not be added</li>
-                        <li>Duplicate IDs will be skipped</li>
-                    </ul>
+                    <div class="file-info">
+                        <strong>File Format:</strong><br>
+                        <strong>Suppliers:</strong> supplier_id, supplier_name, address, phone, email<br>
+                        <strong>Products:</strong> product_id, product_name, description, price, quantity, status, supplier_id<br>
+                        <strong>Status values:</strong> A (Available), B (Backordered), C (Discontinued)<br>
+                        <strong>Max file size:</strong> 5MB
+                    </div>
                 </div>
                 
                 <div class="form-actions">

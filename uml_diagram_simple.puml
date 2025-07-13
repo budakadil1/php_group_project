@@ -1,0 +1,83 @@
+@startuml CP476_Inventory_Classes_Simple
+
+' Use a cleaner style
+skinparam class {
+    BackgroundColor White
+    ArrowColor #666666
+    BorderColor #333333
+}
+
+' Database Layer
+class Database {
+    + getInstance()
+    + getConnection()
+}
+
+' Base Manager (Abstract)
+abstract class BaseManager {
+    # $pdo: PDO
+    + getConnection()
+}
+
+' Entity Classes
+class User {
+    + $id
+    + $username
+    + $email
+}
+
+class Supplier {
+    + $supplier_id
+    + $supplier_name
+    + $address
+    + $phone
+    + $email
+}
+
+class Product {
+    + $product_id
+    + $product_name
+    + $description
+}
+
+class ProductSupplier {
+    + $product_id
+    + $supplier_id
+    + $price
+    + $quantity
+    + $status
+}
+
+' Manager Classes (inherit from BaseManager)
+class UserManager extends BaseManager
+class SupplierManager extends BaseManager
+class ProductManager extends BaseManager
+class ProductSupplierManager extends BaseManager
+
+' Utility Class
+class Importer {
+    + importSuppliers()
+    + importProducts()
+}
+
+' Key Relationships
+Database --> BaseManager : provides connection
+
+UserManager --> User : manages
+SupplierManager --> Supplier : manages
+ProductManager --> Product : manages
+ProductSupplierManager --> ProductSupplier : manages
+
+Importer --> SupplierManager : uses
+Importer --> ProductManager : uses
+Importer --> ProductSupplierManager : uses
+
+' Core Business Relationships
+ProductSupplier --> Product : references
+ProductSupplier --> Supplier : references
+
+' Layout hints
+UserManager -[hidden]right- SupplierManager
+ProductManager -[hidden]right- ProductSupplierManager
+
+@enduml 

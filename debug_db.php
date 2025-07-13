@@ -1,42 +1,69 @@
 <?php
-require_once 'config/database.php';
+require_once 'classes/Database.php';
 
-$pdo = getDBConnection();
-if (!$pdo) {
-    die('Database connection failed.');
-}
+echo "=== DATABASE CONNECTION DEBUG ===\n";
 
-echo "=== DATABASE DEBUG ===\n\n";
-
-// Check if tables exist
-$tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
-echo "Tables in database: " . implode(', ', $tables) . "\n\n";
-
-// Check product table
-echo "=== PRODUCT TABLE ===\n";
-$stmt = $pdo->query("SELECT COUNT(*) as count FROM product");
-$count = $stmt->fetch()['count'];
-echo "Total products: $count\n";
-
-if ($count > 0) {
-    $products = $pdo->query("SELECT * FROM product LIMIT 5")->fetchAll();
-    foreach ($products as $product) {
-        echo "- ID: {$product['product_id']}, Name: {$product['product_name']}, Supplier: {$product['supplier_id']}\n";
+try {
+    // Check the Database class connection
+    $db = Database::getInstance();
+    $pdo = $db->getConnection();
+    
+    // Get database info
+    $dbName = $pdo->query('SELECT DATABASE()')->fetchColumn();
+    echo "Connected to database: " . $dbName . "\n";
+    
+    // Check if tables exist
+    $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+    echo "Tables in database: " . implode(', ', $tables) . "\n";
+    
+    // Check product table structure
+    $productColumns = $pdo->query("DESCRIBE product")->fetchAll(PDO::FETCH_ASSOC);
+    echo "Product table columns:\n";
+    foreach ($productColumns as $column) {
+        echo "  - " . $column['Field'] . " (" . $column['Type'] . ")\n";
     }
-}
-
-// Check supplier table
-echo "\n=== SUPPLIER TABLE ===\n";
-$stmt = $pdo->query("SELECT COUNT(*) as count FROM supplier");
-$count = $stmt->fetch()['count'];
-echo "Total suppliers: $count\n";
-
-if ($count > 0) {
-    $suppliers = $pdo->query("SELECT * FROM supplier LIMIT 5")->fetchAll();
-    foreach ($suppliers as $supplier) {
-        echo "- ID: {$supplier['supplier_id']}, Name: {$supplier['supplier_name']}\n";
+    
+    // Check InventoryTable structure
+    $inventoryColumns = $pdo->query("DESCRIBE InventoryTable")->fetchAll(PDO::FETCH_ASSOC);
+    echo "InventoryTable columns:\n";
+    foreach ($inventoryColumns as $column) {
+        echo "  - " . $column['Field'] . " (" . $column['Type'] . ")\n";
     }
+    
+    // Check actual product count
+    $productCount = $pdo->query("SELECT COUNT(*) FROM product")->fetchColumn();
+    echo "Actual product count in database: " . $productCount . "\n";
+    
+    // Show first few products if any exist
+    if ($productCount > 0) {
+        $products = $pdo->query("SELECT * FROM product LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+        echo "First few products:\n";
+        foreach ($products as $product) {
+            echo "  - ID: " . $product['product_id'] . ", Name: " . $product['product_name'] . "\n";
+        }
+    }
+    
+    // Check if there are any foreign key constraints
+    $foreignKeys = $pdo->query("
+        SELECT 
+            TABLE_NAME,
+            COLUMN_NAME,
+            CONSTRAINT_NAME,
+            REFERENCED_TABLE_NAME,
+            REFERENCED_COLUMN_NAME
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE REFERENCED_TABLE_SCHEMA = DATABASE()
+        AND REFERENCED_TABLE_NAME IS NOT NULL
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    
+    echo "Foreign key constraints:\n";
+    foreach ($foreignKeys as $fk) {
+        echo "  - " . $fk['TABLE_NAME'] . "." . $fk['COLUMN_NAME'] . " -> " . $fk['REFERENCED_TABLE_NAME'] . "." . $fk['REFERENCED_COLUMN_NAME'] . "\n";
+    }
+    
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage() . "\n";
 }
 
-echo "\n=== END DEBUG ===\n";
+echo "=== END DEBUG ===\n";
 ?> 

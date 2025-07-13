@@ -5,9 +5,7 @@
  */
 
 session_start();
-
-// Include database configuration
-require_once 'config/database.php';
+require_once __DIR__ . '/classes/User.php';
 
 $error = '';
 
@@ -15,24 +13,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    // Validate input
     if (empty($username) || empty($password)) {
         $error = 'Please enter both username and password.';
     } else {
-        // Initialize database if needed
-        initializeDatabase();
-        
-        // Authenticate user
-        $user = authenticateUser($username, $password);
-        
+        $userManager = new UserManager();
+        $user = $userManager->authenticateUser($username, $password);
         if ($user) {
-            // Set session variables
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['email'] = $user['email'];
+            $_SESSION['user_id'] = $user->id;
+            $_SESSION['username'] = $user->username;
+            $_SESSION['email'] = $user->email;
             $_SESSION['logged_in'] = true;
-            
-            // Redirect to dashboard
             header('Location: dashboard.php');
             exit();
         } else {
